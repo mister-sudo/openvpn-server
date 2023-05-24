@@ -1,0 +1,27 @@
+---
+- name: Create openvpn server directory
+  file:
+    path: "{{ openvpn_ca_dir }}/server"
+    state: directory
+
+- name: Generate server key
+  command: >
+    openssl req -nodes -newkey rsa:{{ openvpn_rsa_bits }} -keyout ./server/server.key
+    -out ./server/server.csr -days 3650 -subj /CN=OpenVPN-Server-{{ inventory_hostname[:49] }}/
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+    creates: ./server/server.key
+
+- name: Sign server key
+  command: >
+    openssl x509 -req -in ./server/server.csr -out ./server/server.crt -CA ca.crt -CAkey ca-key.pem
+    -sha256 -days 3650 -CAcreateserial -passin pass:{{ ca_pass }} -extfile ./cert-ext/openssl-server.ext
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+    creates: ./server/server.crt
+
+- name: Generate dh.pem
+  command: openssl dhparam -out dh.pem {{ openvpn_rsa_bits }}
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+    creates: dh.pem

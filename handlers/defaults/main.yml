@@ -1,0 +1,22 @@
+---
+openvpn_base_dir: /etc/openvpn
+openvpn_ca_dir: /etc/openvpn/CA
+openvpn_config_file: server
+openvpn_rsa_bits: 2048
+openvpn_service_name: openvpn@server
+openvpn_port: 1194
+openvpn_proto: udp
+openvpn_server_network: 10.15.0.0
+openvpn_server_netmask: 255.255.255.0
+openvpn_topology: subnet
+openvpn_redirect_gateway: True
+#openvpn_push:
+#  - route 172.19.100.0 255.255.255.0
+#  - route 172.21.0.0 255.255.0.0
+#  - route 0.0.0.0 0.0.0.0
+openvpn_dns_servers:
+  - 77.88.8.8
+  - 8.8.8.8
+openvpn_verify_cn: False
+openvpn_status_version: 1
+openvpn_fetch_config_dir: ~/openvpn
