@@ -7,7 +7,7 @@ remote-cert-tls server
 tls-version-min 1.2
 
 proto {{ openvpn_proto }}
-remote {{ ansible_default_ipv4.address }} {{ openvpn_port }}
+remote {{ vpn_address }} {{ openvpn_port }}
 dev tun
 
 resolv-retry 5
