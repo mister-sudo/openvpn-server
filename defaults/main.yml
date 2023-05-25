@@ -22,3 +22,4 @@ openvpn_status_version: 1
 openvpn_fetch_config_dir: ~/openvpn
 #ca_pass:   добавлено в group_vars/all роли с инвентарём
 #vpn_users: []  добавлено в group_vars/all роли с инвентарём
+#vpn_address: server_dns_name
