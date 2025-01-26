@@ -1,0 +1,15 @@
+---
+- name: Generate CA
+  include_tasks: CA.yml
+
+- name: Generate server keys
+  include_tasks: server-key.yml
+
+- name: Configure openvpn
+  include_tasks: openvpn_config.yml
+
+- name: Add or remove user
+  include_tasks: user_register.yml
+
+- name: Add network rules
+  include_tasks: network.yml

@@ -1,0 +1,99 @@
+---
+- name: "Create openvpn {{ item }} directory"
+  file:
+    path: "{{ openvpn_ca_dir }}/client/{{ item }}"
+    state: directory
+  with_items: "{{ vpn_users }}"
+
+- name: "Generate keys"
+  command: >
+    openssl req -nodes -newkey rsa:{{ openvpn_rsa_bits }} -keyout ./client/{{ item }}/{{ item }}.key
+    -out ./client/{{ item }}/{{ item }}.csr -days 3650
+    -subj /CN=OpenVPN-Client-{{ inventory_hostname[:24] }}-{{ item[:24] }}/
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+    creates: "./client/{{ item }}/{{ item }}.key"
+  with_items: "{{ vpn_users }}"
+
+- name: "Sign certs"
+  command: >
+    openssl x509 -req -in ./client/{{ item }}/{{ item }}.csr -out ./client/{{ item }}/{{ item }}.crt
+    -CA ca.crt -CAkey ca-key.pem -sha256 -days 3650 -passin pass:{{ ca_pass }} -extfile ./cert-ext/openssl-client.ext
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+    creates: "./client/{{ item }}/{{ item }}.crt"
+  with_items: "{{ vpn_users }}"
+
+- name: Register server ca key
+  slurp:
+    src: "{{ openvpn_ca_dir }}/ca.crt"
+  register: ca_cert
+
+- name: Register tls-auth key
+  slurp:
+    src: "{{ openvpn_ca_dir }}/ta.key"
+  register: tls_auth
+
+- name: "Register certs"
+  slurp:
+    src: "{{ openvpn_ca_dir }}/client/{{ item }}/{{ item }}.crt"
+  with_items: "{{ vpn_users }}"
+  register: client_certs
+
+- name: "Register {{ item }} keys"
+  slurp:
+    src: "{{ openvpn_ca_dir }}/client/{{ item }}/{{ item }}.key"
+  with_items: "{{ vpn_users }}"
+  register: client_keys
+
+- name: mkdir output
+  delegate_to: localhost
+  become: no
+  file:
+    path: ~/output
+    state: directory
+
+- name: "Generate config"
+  template:
+    src: client.ovpn.j2
+    dest: "~/output/{{ item.0.item }}-{{ inventory_hostname }}.ovpn"
+  become: no
+  delegate_to: localhost
+  with_together:
+    - "{{ client_certs.results }}"
+    - "{{ client_keys.results }}"
+
+- name: List revoke user sert
+  find:
+    paths: "{{ openvpn_ca_dir }}/client"
+    patterns: "*.crt"
+    recurse: yes
+    exclude: "{{ vpn_users | zip_longest([], fillvalue='.crt')| map('join') | join(',') }}"
+  register: find_revoke
+
+- name: "Revoke cert"
+  command: openssl ca -config ca.conf -revoke {{ item.path }} -passin pass:{{ ca_pass }}
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+  with_items: "{{ find_revoke.files }}"
+  when: find_revoke.files != []
+
+- name: Regen certificate revocation list
+  command: openssl ca -gencrl -config ca.conf -out ca-crl.pem -passin pass:{{ ca_pass }} # noqa 301
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+#  when: find_revoke.files != []
+
+- name: Find revoke users dir
+  find:
+    paths: "{{ openvpn_ca_dir }}/client"
+    file_type: directory
+    exclude: "{{ vpn_users }}"
+  register: find_revoke_dir
+
+- name: "Delete revoke user"
+  file:
+    path: "{{ item.path }}"
+    state: absent
+  with_items: "{{ find_revoke_dir.files }}"
+  when: find_revoke_dir.files != []

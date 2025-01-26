@@ -1,0 +1,56 @@
+# {{ ansible_managed }}
+
+port {{openvpn_port}}
+proto {{openvpn_proto}}
+dev tun
+duplicate-cn
+
+ca {{openvpn_ca_dir}}/ca.crt
+cert {{openvpn_ca_dir}}/server/server.crt
+key {{openvpn_ca_dir}}/server/server.key
+dh {{openvpn_ca_dir}}/dh.pem
+crl-verify {{openvpn_ca_dir}}/ca-crl.pem
+tls-auth {{openvpn_ca_dir}}/ta.key 0
+tls-server
+auth SHA256
+cipher AES-256-CBC
+tls-version-min 1.2
+tls-cipher TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-RSA-WITH-AES-256-GCM-SHA384:TLS-DHE-RSA-WITH-AES-256-GCM-SHA384:TLS-ECDHE-ECDSA-WITH-AES-256-CBC-SHA384:TLS-ECDHE-RSA-WITH-AES-256-CBC-SHA384:TLS-DHE-RSA-WITH-AES-256-CBC-SHA256
+
+server {{openvpn_server_network}} {{openvpn_server_netmask}}
+{% if openvpn_topology is defined %}
+topology {{openvpn_topology}}
+{% endif %}
+ifconfig-pool-persist ipp.txt
+
+{% if openvpn_redirect_gateway|bool %}
+push "redirect-gateway def1 bypass-dhcp"
+{% endif %}
+
+{% if openvpn_dns_servers is defined %}
+{% for srv in openvpn_dns_servers %}
+push "dhcp-option DNS {{ srv }}"
+{% endfor %}
+{% endif %}
+
+{% if openvpn_push is defined %}
+{% for opt in openvpn_push %}
+push "{{ opt }}"
+{% endfor %}
+{% endif %}
+keepalive 5 30
+persist-key
+persist-tun
+user nobody
+group nogroup
+client-to-client
+
+status openvpn-status.log
+status-version {{ openvpn_status_version }}
+log-append /var/log/openvpn.log
+verb 3
+
+{% if openvpn_verify_cn|bool %}
+verify-x509-name OpenVPN-Client-{{inventory_hostname[:24]}} name-prefix
+remote-cert-tls client
+{% endif %}

@@ -1,0 +1,79 @@
+---
+- name: Install openvpn
+  apt:
+    name: "{{ item }}"
+    state: present
+    update_cache: yes
+  with_items:
+    - openvpn
+    - openssl
+    - iptables-persistent
+
+- name: Create openvpn cert extention
+  file:
+    path: "{{ openvpn_ca_dir }}/cert-ext"
+    state: directory
+
+- name: Copy openssl extension
+  copy:
+    src: "{{ item }}"
+    dest: "{{ openvpn_ca_dir }}/cert-ext"
+    owner: root
+    group: root
+    mode: 0400
+  with_items:
+    - openssl-ca.ext
+    - openssl-client.ext
+    - openssl-server.ext
+
+- name: Generate CA key
+  command: >
+    openssl req -newkey rsa:{{ openvpn_rsa_bits }} -keyout ca-key.pem
+    -out ca-csr.pem -days 3650 -subj /CN=OpenVPN-CA-{{ inventory_hostname[:53] }}/ -passout pass:{{ ca_pass }}
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+    creates: ca-key.pem
+
+- name: Protect CA key
+  file:
+    path: "{{ openvpn_ca_dir }}/ca-key.pem"
+    mode: 0400
+
+- name: Sign CA key
+  command: >
+    openssl x509 -req -in ca-csr.pem -out ca.crt -CAcreateserial -signkey ca-key.pem
+    -sha256 -days 3650 -passin pass:{{ ca_pass }} -extfile {{ openvpn_ca_dir }}/cert-ext/openssl-ca.ext
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+    creates: ca.crt
+
+- name: Install ca.conf config file
+  template:
+    src: ca.conf.j2
+    dest: "{{ openvpn_ca_dir }}/ca.conf"
+    owner: root
+    group: root
+    mode: 0744
+
+- name: Create initial certificate revocation list squence number
+  shell: "echo 00 > crl_number"
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+    creates: crl_number
+
+- name: Generate tls-auth key
+  command: openvpn --genkey --secret ta.key
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+    creates: ta.key
+
+- name: Ensure certificate revocation list database exists
+  file:
+    path: "{{ openvpn_ca_dir }}/index.txt"
+    state: touch
+
+- name: Set up certificate revocation list
+  command: openssl ca -gencrl -config ca.conf -out ca-crl.pem -passin pass:{{ ca_pass }}
+  args:
+    chdir: "{{ openvpn_ca_dir }}"
+    creates: "{{ openvpn_ca_dir }}/ca-crl.pem"

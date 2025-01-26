@@ -1,0 +1,7 @@
+galaxy_info:
+  role_name: openvpn-server
+  author: Albert Palmin (palminas@cloud-team.ru)
+  description: Role for openvpn server
+  company: CloudTeam
+  license: BSD
+dependencies: []
